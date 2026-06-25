@@ -10,131 +10,293 @@ catalog_icon: /integrations/assets/ag-ui.png
   <span class="lst-supported">Supported in ADK</span><span class="lst-python">Python</span><span class="lst-typescript">TypeScript</span><span class="lst-go">Go</span><span class="lst-java">Java</span>
 </div>
 
-Turn your ADK agents into full-featured applications with rich, responsive UIs.
-[AG-UI](https://docs.ag-ui.com/) is an open protocol that handles streaming
-events, client state, and bi-directional communication between your agents and
-users.
+[AG-UI](https://docs.ag-ui.com/introduction) is the event protocol for
+connecting [Agent Development Kit (ADK)](/get-started/about/) agents to
+user-facing applications. The `ag-ui-adk` middleware wraps an ADK agent,
+translates the agent run into AG-UI events, and exposes those events from a
+FastAPI endpoint that any AG-UI-compatible client can consume.
 
-[AG-UI](https://github.com/ag-ui-protocol/ag-ui) provides a consistent interface
-to empower rich clients across technology stacks, from mobile to the web and
-even the command line. There are a number of different clients that support
-AG-UI:
+Use AG-UI when your ADK agent needs a live interface. Instead of treating an
+agent run as one request and one response, AG-UI models the run as an ordered
+stream of messages, tool calls, state updates, lifecycle events, and user
+interaction.
 
-- [CopilotKit](https://copilotkit.ai) provides tooling and components to tightly
-  integrate your agent with web applications
-- Clients for
-  [Kotlin](https://github.com/ag-ui-protocol/ag-ui/tree/main/sdks/community/kotlin),
-  [Java](https://github.com/ag-ui-protocol/ag-ui/tree/main/sdks/community/java),
-  [Go](https://github.com/ag-ui-protocol/ag-ui/tree/main/sdks/community/go/example/client),
-  and [CLI
-  implementations](https://github.com/ag-ui-protocol/ag-ui/tree/main/apps/client-cli-example/src)
-  in TypeScript
+## Use cases
 
-This tutorial uses CopilotKit to create a sample app backed by an ADK agent that
-demonstrates some of the features supported by AG-UI.
+AG-UI defines how an agent backend and client exchange interaction events. The
+client can be a chat surface, a workflow UI, a dashboard, a mobile app, or a
+custom interface that consumes the same event stream.
 
-## Quickstart
+- **Streaming messages**: Show assistant output as it is generated, including
+  message chunks, reasoning summaries, and completion events.
+- **Tool calls and actions**: Display backend tool activity, run
+  frontend-defined actions, and capture human-in-the-loop decisions.
+- **Generative UI**: Render rich, interactive components from tool calls,
+  agent state, or structured UI payloads such as A2UI.
+- **State synchronization**: Keep the agent and UI working from the same
+  application context using snapshots and deltas.
+- **Run lifecycle visibility**: Show start, progress, finish, error, interrupt,
+  and resume signals for long-running agent work.
 
-To get started, let's create a sample application with an ADK agent and a simple
-web client:
+AG-UI does not force one UI framework or visual style. It standardizes the event
+contract so your frontend can render the interaction in the way your application
+needs.
 
-1. Create the app:
+## How AG-UI and A2UI fit
 
-    ```bash
-    npx copilotkit@latest create -f adk
+AG-UI and [A2UI](https://a2ui.org/) solve different parts of the
+user-interface stack. They are complementary and can be used together:
+
+- **AG-UI:** event protocol for streaming messages, tool calls/actions, state,
+  lifecycle, and user interaction between an agent backend and client.
+- **A2UI:** declarative UI payload/schema format for structured UI payloads
+  that describe components such as cards, forms, tables, and charts.
+
+A common stack is: ADK runs the agent, AG-UI carries the interaction events,
+A2UI describes any declarative UI payloads the agent emits, and your client
+renders the experience.
+
+## How it works
+
+### Event stream
+
+An AG-UI run is a stream of JSON events. Each event has a `type` discriminator,
+and related events share stable identifiers such as `runId`, `messageId`, and
+`toolCallId`.
+
+??? example "See an example stream"
+
+    ```json
+    [
+      {
+        "type": "RUN_STARTED",
+        "threadId": "thread_1",
+        "runId": "run_1"
+      },
+      {
+        "type": "TEXT_MESSAGE_START",
+        "messageId": "msg_1",
+        "role": "assistant"
+      },
+      {
+        "type": "TEXT_MESSAGE_CONTENT",
+        "messageId": "msg_1",
+        "delta": "I can check that"
+      },
+      {
+        "type": "TEXT_MESSAGE_CONTENT",
+        "messageId": "msg_1",
+        "delta": " for you."
+      },
+      {
+        "type": "TEXT_MESSAGE_END",
+        "messageId": "msg_1"
+      },
+      {
+        "type": "RUN_FINISHED",
+        "threadId": "thread_1",
+        "runId": "run_1"
+      }
+    ]
     ```
 
-2. Set your Google API key:
+The frontend renders incrementally. In this example, the client starts a run
+indicator when it receives `RUN_STARTED`, creates an assistant message for
+`TEXT_MESSAGE_START`, appends each `TEXT_MESSAGE_CONTENT.delta`, and finalizes
+the message when `TEXT_MESSAGE_END` arrives.
 
-    ```bash
-    export GOOGLE_API_KEY="your-api-key"
+### Tool calls and actions
+
+AG-UI uses the same start, stream, end pattern for tool calls. The agent can
+announce a tool call, stream arguments, finish the call, and emit the result.
+
+??? example "See an example stream"
+
+    ```json
+    [
+      {
+        "type": "TOOL_CALL_START",
+        "toolCallId": "call_1",
+        "toolCallName": "get_weather",
+        "parentMessageId": "msg_1"
+      },
+      {
+        "type": "TOOL_CALL_ARGS",
+        "toolCallId": "call_1",
+        "delta": "{\"city\":\"Mountain View\""
+      },
+      {
+        "type": "TOOL_CALL_ARGS",
+        "toolCallId": "call_1",
+        "delta": ",\"units\":\"fahrenheit\"}"
+      },
+      {
+        "type": "TOOL_CALL_END",
+        "toolCallId": "call_1"
+      },
+      {
+        "type": "TOOL_CALL_RESULT",
+        "messageId": "tool_msg_1",
+        "toolCallId": "call_1",
+        "content": "{\"temperature\":72,\"condition\":\"clear\"}",
+        "role": "tool"
+      }
+    ]
     ```
 
-3. Install dependencies and run:
+Backend tools still belong in the ADK agent or toolset. Frontend actions belong
+in the client, where they can use browser state, user permissions, and local UI
+context safely. For example, a frontend-defined action might open a confirmation
+dialog, navigate the application, or edit local state after the agent requests
+it.
 
-    ```bash
-    npm install && npm run dev
+### State sync
+
+State events let the UI and agent share application context. A snapshot gives
+the client a complete baseline. A delta communicates a smaller change using
+[JSON Patch](https://datatracker.ietf.org/doc/html/rfc6902), such as the
+selected item, current form values, generated artifacts, or progress for a
+multi-step task.
+
+??? example "See an example stream"
+
+    ```json
+    [
+      {
+        "type": "STATE_SNAPSHOT",
+        "snapshot": {
+          "selectedCity": "Mountain View",
+          "units": "fahrenheit",
+          "weatherCardVisible": false
+        }
+      },
+      {
+        "type": "STATE_DELTA",
+        "delta": [
+          {
+            "op": "replace",
+            "path": "/weatherCardVisible",
+            "value": true
+          },
+          {
+            "op": "add",
+            "path": "/lastUpdatedBy",
+            "value": "agent"
+          }
+        ]
+      }
+    ]
     ```
 
-This starts two servers:
+Use state sync for product state that should influence the agent or be updated
+by it. Continue to validate user-originated state changes in your application
+before applying side effects.
 
-- **http://localhost:3000** - The web UI (open this in your browser)
-- **http://localhost:8000** - The ADK agent API (backend only)
+## Get started
 
-Open [http://localhost:3000](http://localhost:3000) in your browser to chat with
-your agent.
+### Prerequisites
 
-## Features
+- Python 3.10+
+- A [Gemini API key](https://aistudio.google.com/apikey) for the ADK agent
 
-### Chat
+### Install the middleware
 
-Chat is a familiar interface for exposing your agent, and AG-UI handles
-streaming messages between your users and agents:
+Install ADK, FastAPI, and the AG-UI middleware package:
 
-```tsx title="src/app/page.tsx"
-<CopilotSidebar
-  clickOutsideToClose={false}
-  defaultOpen={true}
-  labels={{
-    title: "Popup Assistant",
-    initial: "👋 Hi, there! You're chatting with an agent. This agent comes with a few tools to get you started..."
-  }}
-/>
+```bash
+pip install google-adk ag-ui-adk fastapi "uvicorn[standard]" python-dotenv
 ```
 
-Learn more about the chat UI
-[in the CopilotKit docs](https://docs.copilotkit.ai/adk/agentic-chat-ui).
+### Wrap your ADK agent
 
-### Generative UI
+An ADK `LlmAgent` does not speak AG-UI by itself. Keep your existing agent code,
+then wrap the agent with `ADKAgent` and expose it with
+`add_adk_fastapi_endpoint`.
 
-AG-UI lets you share tool information with a Generative UI so that it can be
-displayed to users:
+```python title="agent/main.py"
+from ag_ui_adk import ADKAgent, add_adk_fastapi_endpoint
+from dotenv import load_dotenv
+from fastapi import FastAPI
+from google.adk.agents import LlmAgent
+from google.adk.tools import ToolContext
 
-```tsx title="src/app/page.tsx"
-useRenderToolCall(
-  {
-    name: "get_weather",
-    description: "Get the weather for a given location.",
-    parameters: [{ name: "location", type: "string", required: true }],
-    render: ({ args }) => {
-      return <WeatherCard location={args.location} themeColor={themeColor} />;
-    },
-  },
-  [themeColor],
-);
+load_dotenv()
+
+
+def get_weather(tool_context: ToolContext, location: str) -> dict:
+    """Get the weather for a location."""
+    return {
+        "status": "success",
+        "message": f"The weather in {location} is sunny.",
+    }
+
+
+root_agent = LlmAgent(
+    model="gemini-flash-latest",
+    name="support_agent",
+    instruction="Help the user. Use tools when they answer the request.",
+    tools=[get_weather],
+)
+
+ag_ui_agent = ADKAgent(
+    adk_agent=root_agent,
+    user_id="demo_user",
+    session_timeout_seconds=3600,
+    use_in_memory_services=True,
+)
+
+app = FastAPI(title="ADK AG-UI Agent")
+add_adk_fastapi_endpoint(app, ag_ui_agent, path="/")
 ```
 
-Learn more about Generative UI
-[in the CopilotKit docs](https://docs.copilotkit.ai/adk/generative-ui).
+`ADKAgent` is the middleware boundary. It manages the ADK run, sessions, and
+event conversion so the endpoint can stream AG-UI events to a client.
 
-### Shared State
+### Run the server
 
-ADK agents can be stateful, and synchronizing that state between your agents and
-your UIs enables powerful and fluid user experiences. State can be synchronized
-both ways so agents are automatically aware of changes made by your user or
-other parts of your application:
+Add your API key, then start the FastAPI app:
 
-```tsx title="src/app/page.tsx"
-const { state, setState } = useCoAgent<AgentState>({
-  name: "my_agent",
-  initialState: {
-    proverbs: [
-      "A journey of a thousand miles begins with a single step.",
-    ],
-  },
-})
+```bash
+export GOOGLE_API_KEY="your-google-api-key"
+uvicorn agent.main:app --host 0.0.0.0 --port 8000
 ```
 
-Learn more about shared state
-[in the CopilotKit docs](https://docs.copilotkit.ai/adk/shared-state).
+The AG-UI endpoint is now available at `http://localhost:8000/`.
 
-## Resources
+### Connect a client
 
-To see what other features you can build into your UI with AG-UI, refer to the
-CopilotKit docs:
+Any AG-UI-compatible client can connect to the endpoint. The client sends user
+input, available client-side actions, state, and resume data. The middleware
+streams AG-UI events back in order.
 
-- [Agentic Generative UI](https://docs.copilotkit.ai/adk/generative-ui/agentic)
-- [Human in the Loop](https://docs.copilotkit.ai/adk/human-in-the-loop)
-- [Frontend Actions](https://docs.copilotkit.ai/adk/frontend-actions)
+[CopilotKit](https://docs.copilotkit.ai/) is one option when you want
+ready-made chat components, frontend tools, shared state, and A2UI rendering.
+Use `npx copilotkit create -f adk` if you want a full-stack starter that
+already points a frontend at an ADK AG-UI server.
 
-Or try them out in the [AG-UI Dojo](https://dojo.ag-ui.com).
+## Implementation shape
+
+The middleware handles the ADK-to-AG-UI translation, but the boundary is still
+straightforward:
+
+1. Accept client input for the conversation, available frontend actions, current
+   state, and resume data.
+2. Run the ADK agent.
+3. Convert the agent's messages, tool activity, state changes, and run
+   lifecycle into AG-UI events.
+4. Stream those events to the client in order.
+5. Accept action results or user decisions from the client and continue the run
+   when needed.
+
+This keeps the boundary clear: ADK owns agent execution, AG-UI owns the event
+contract, and your client owns rendering and user-side side effects.
+
+## Additional resources
+
+- [AG-UI overview](https://docs.ag-ui.com/introduction)
+- [AG-UI events](https://docs.ag-ui.com/concepts/events)
+- [AG-UI state management](https://docs.ag-ui.com/concepts/state)
+- [AG-UI tools](https://docs.ag-ui.com/concepts/tools)
+- [A2UI documentation](https://a2ui.org/)
+- [CopilotKit documentation](https://docs.copilotkit.ai/)
+- [CopilotKit frontend tools](https://docs.copilotkit.ai/google-adk/frontend-tools)
