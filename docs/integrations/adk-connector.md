@@ -1,6 +1,6 @@
 ---
 catalog_title: ADK Connector
-catalog_description: Expose ADK agents as chatbots on popular messaging channels with cross-device session sync
+catalog_description: Expose ADK agents as chatbots on popular messaging platforms with cross-device session sync
 catalog_icon: /integrations/assets/adk-connector.png
 catalog_tags: ["connectors"]
 ---
@@ -13,8 +13,8 @@ catalog_tags: ["connectors"]
 
 [ADK Connector](https://github.com/Harshk133/adk-connector) is a plug-and-play
 toolkit that wraps any ADK agent and exposes it as a chatbot on popular
-messaging channels such as Telegram and Discord. See the project repository for
-the current list of supported channels.
+messaging platforms such as Telegram and Discord. See the project repository for
+the current list of supported platforms.
 
 By adding just a few lines of code, you can bridge the gap between local
 development, testing, and production messaging platforms, with native support
@@ -22,8 +22,8 @@ for database-backed cross-device session synchronization.
 
 ## Use cases
 
-- **Multi-Channel Deployment**: Instantly deploy your ADK agents (written in
-  Python or JavaScript/TypeScript) as chatbots on supported messaging channels
+- **Multi-Platform Deployment**: Instantly deploy your ADK agents (written in
+  Python or JavaScript/TypeScript) as chatbots on supported messaging platforms
   like Telegram and Discord.
 - **Cross-Device Session Synchronization**: Seamlessly transition conversations.
   Chat on Telegram or Discord, then inspect, debug, and continue the exact same
@@ -38,7 +38,7 @@ for database-backed cross-device session synchronization.
 
 - Python 3.10+ or Node.js 18+
 - A Gemini API Key (set as `GOOGLE_API_KEY`)
-- Messaging channel credentials:
+- Messaging platform credentials:
     - **Telegram**: A Telegram account and a Bot Token from BotFather
     - **Discord**: A Discord developer account, a Discord Bot Token, and client ID
 
@@ -69,7 +69,7 @@ depending on your ADK project.
 ## Use with agent
 
 Here is how you can wrap your existing Google ADK agents and launch them on
-messaging channels.
+messaging platforms.
 
 === "Python (Telegram)"
 
